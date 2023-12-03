@@ -120,7 +120,8 @@ extension CGPoint: SpringValueProtocol {
 }
 
 @Observable
-class SpringValue<Value: SpringValueProtocol> {
+class SpringValue<Value: SpringValueProtocol>: AnimatedProtocol {
+    let id = UUID()
     var value: Value
     var target: Value
     var velocity: Value = .zero
@@ -131,6 +132,7 @@ class SpringValue<Value: SpringValueProtocol> {
     }
     
     func animate(to: Value) {
+        DisplayLink.shared.addAnimation(self)
         target = to
     }
     
@@ -151,6 +153,35 @@ class SpringValue<Value: SpringValueProtocol> {
     }
 }
 
+protocol AnimatedProtocol {
+    var id: UUID { get }
+    func update(timeDelta: TimeInterval)
+}
+
+class DisplayLink {
+    
+    static let shared = DisplayLink()
+    
+    var displayLink: CADisplayLink?
+    
+    var animatons: [UUID:AnimatedProtocol] = [:]
+    
+    func setupDisplayLink() {
+        displayLink = CADisplayLink(target: self, selector: #selector(step))
+        displayLink?.add(to: .current, forMode: .common)
+    }
+    
+    func addAnimation(_ animation: AnimatedProtocol) {
+        animatons[animation.id] = animation
+    }
+    
+    @objc func step(link: CADisplayLink) {
+        for animaton in animatons.values {
+            animaton.update(timeDelta: link.duration)
+        }
+    }
+}
+
 struct ContentView: View {
     @State var offset: CGPoint = CGPoint(x: 100, y: 200)
     @Animated var offsetSpring: CGPoint = CGPoint(x: 100, y: 200)
@@ -168,17 +199,6 @@ struct ContentView: View {
             
             CircleView(offset: offsetSpring)
         }
-        .background {
-            TimelineView(.animation) {context in
-                Color.clear
-                    .onChange(of: context.date) {
-                        timeDelta = context.date.timeIntervalSince(lastDate)
-                        lastDate = context.date
-                        
-                        $offsetSpring.update(timeDelta: timeDelta)
-                    }
-            }
-        }
         .onTapGesture {
             if isBig {
                 offset = CGPoint(x: 50, y: -200)
@@ -187,6 +207,9 @@ struct ContentView: View {
             }
             offsetSpring = offset
             isBig.toggle()
+        }
+        .onAppear {
+            DisplayLink.shared.setupDisplayLink()
         }
     }
 }

@@ -32,6 +32,36 @@ struct CircleView: View {
     }
 }
 
+// @Animated var offset: Double = 0.0
+// var _offset = Animated(wrappedValue: 0.0)
+// var offset: Double {
+//      get { _offset.wrappedValue }
+//      set { _offset.wrappedValue = newValue }
+// }
+
+@propertyWrapper
+struct Animated: DynamicProperty {
+    @State var springDouble: SpringDouble
+    
+    init(wrappedValue: Double) {
+        self.springDouble = SpringDouble(value: wrappedValue)
+    }
+    
+    var wrappedValue: Double {
+        get {
+            springDouble.value
+        }
+        
+        nonmutating set {
+            springDouble.animate(to: newValue)
+        }
+    }
+    
+    var projectedValue: SpringDouble {
+        springDouble
+    }
+}
+
 @Observable
 class SpringDouble {
     var value: Double
@@ -66,7 +96,8 @@ class SpringDouble {
 
 struct ContentView: View {
     @State var offset: Double = 200
-    @State var offsetSpring = SpringDouble(value: 200)
+    @Animated var offsetSpring = 200
+    // @animated var offsetSpring = 200.0
     
     @State var lastDate: Date = Date()
     @State var timeDelta: Double = 0.0
@@ -77,7 +108,8 @@ struct ContentView: View {
                 .animation(.spring, value: offset)
             
             
-            CircleView(offset: offsetSpring.value)
+            CircleView(offset: offsetSpring)
+            // CircleView(offset: offsetSpring)
             
         }
         .background {
@@ -87,13 +119,14 @@ struct ContentView: View {
                         timeDelta = context.date.timeIntervalSince(lastDate)
                         lastDate = context.date
                         
-                        offsetSpring.update(timeDelta: timeDelta)
+                        $offsetSpring.update(timeDelta: timeDelta)
                     }
             }
         }
         .onTapGesture {
             offset *= -1
-            offsetSpring.animate(to: -offsetSpring.target)
+//            offsetSpring.animate(to: -offsetSpring.target)
+             offsetSpring = offset
         }
     }
 }

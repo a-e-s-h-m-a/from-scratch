@@ -72,6 +72,8 @@ protocol SpringValueProtocol {
     func scaled(by scalar: Double) -> Self
     
     static var zero: Self { get }
+    
+    var magnitudeSquared: Double { get }
 }
 
 extension Double: SpringValueProtocol {
@@ -97,6 +99,10 @@ extension Double: SpringValueProtocol {
 }
 
 extension CGPoint: SpringValueProtocol {
+    var magnitudeSquared: Double {
+        x * x + y * y
+    }
+    
     static func + (lhs: CGPoint, rhs: CGPoint) -> CGPoint {
         CGPoint(x: lhs.x + rhs.x, y: lhs.y + rhs.y)
     }
@@ -121,10 +127,17 @@ extension CGPoint: SpringValueProtocol {
 
 @Observable
 class SpringValue<Value: SpringValueProtocol>: AnimatedProtocol {
+    var isDone: Bool {
+        let displacement = value - target
+        return velocity.magnitudeSquared < epsilon && displacement.magnitudeSquared < epsilon
+    }
+    
     let id = UUID()
     var value: Value
     var target: Value
     var velocity: Value = .zero
+    
+    let epsilon = 0.0005
     
     init(value: Value) {
         self.value = value
@@ -155,6 +168,7 @@ class SpringValue<Value: SpringValueProtocol>: AnimatedProtocol {
 
 protocol AnimatedProtocol {
     var id: UUID { get }
+    var isDone: Bool { get }
     func update(timeDelta: TimeInterval)
 }
 
@@ -162,15 +176,21 @@ protocol AnimatedProtocol {
 class AnimatonManager {
     
     static let shared = AnimatonManager()
-    var animatons: [UUID:AnimatedProtocol] = [:]
+    var animations: [UUID:AnimatedProtocol] = [:]
     
     func addAnimation(_ animation: AnimatedProtocol) {
-        animatons[animation.id] = animation
+        print("ADDING ANIMATION: \(animation.id)")
+        animations[animation.id] = animation
     }
     
     func step(timeDelta: TimeInterval) {
-        for animaton in animatons.values {
-            animaton.update(timeDelta: timeDelta)
+        for animation in animations.values {
+            animation.update(timeDelta: timeDelta)
+            print("STEPPING ANIMATION: \(animation.id): \(timeDelta)")
+            if animation.isDone {
+                print("IS DONE ANIMATION: \(animation.id)")
+                animations.removeValue(forKey: animation.id)
+            }
         }
     }
 }
@@ -183,13 +203,18 @@ struct AnimationManagerModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background {
-                TimelineView(.animation) { context in
+                TimelineView(.animation(paused: manager.animations.isEmpty)) { context in
                     Color.clear
                         .onChange(of: context.date) {
                             let timeDelta = context.date.timeIntervalSince(lastRenderedDate ?? Date())
                             lastRenderedDate = context.date
                             manager.step(timeDelta: timeDelta)
                         }
+                }
+            }
+            .onChange(of: manager.animations.isEmpty) {
+                if $1 {
+                    lastRenderedDate = nil
                 }
             }
     }

@@ -132,7 +132,7 @@ class SpringValue<Value: SpringValueProtocol>: AnimatedProtocol {
     }
     
     func animate(to: Value) {
-        DisplayLink.shared.addAnimation(self)
+        AnimatonManager.shared.addAnimation(self)
         target = to
     }
     
@@ -158,27 +158,40 @@ protocol AnimatedProtocol {
     func update(timeDelta: TimeInterval)
 }
 
-class DisplayLink {
+@Observable
+class AnimatonManager {
     
-    static let shared = DisplayLink()
-    
-    var displayLink: CADisplayLink?
-    
+    static let shared = AnimatonManager()
     var animatons: [UUID:AnimatedProtocol] = [:]
-    
-    func setupDisplayLink() {
-        displayLink = CADisplayLink(target: self, selector: #selector(step))
-        displayLink?.add(to: .current, forMode: .common)
-    }
     
     func addAnimation(_ animation: AnimatedProtocol) {
         animatons[animation.id] = animation
     }
     
-    @objc func step(link: CADisplayLink) {
+    func step(timeDelta: TimeInterval) {
         for animaton in animatons.values {
-            animaton.update(timeDelta: link.duration)
+            animaton.update(timeDelta: timeDelta)
         }
+    }
+}
+
+struct AnimationManagerModifier: ViewModifier {
+    @State var manager = AnimatonManager.shared
+    
+    @State var lastRenderedDate: Date?
+    
+    func body(content: Content) -> some View {
+        content
+            .background {
+                TimelineView(.animation) { context in
+                    Color.clear
+                        .onChange(of: context.date) {
+                            let timeDelta = context.date.timeIntervalSince(lastRenderedDate ?? Date())
+                            lastRenderedDate = context.date
+                            manager.step(timeDelta: timeDelta)
+                        }
+                }
+            }
     }
 }
 
@@ -208,9 +221,7 @@ struct ContentView: View {
             offsetSpring = offset
             isBig.toggle()
         }
-        .onAppear {
-            DisplayLink.shared.setupDisplayLink()
-        }
+        .modifier(AnimationManagerModifier())
     }
 }
 
